@@ -1,0 +1,292 @@
+CREATE DATABASE BaseDeDatos_TGDS;
+
+//CREACIÓN DE TABLAS
+
+–Tablas Usuarios
+
+CREATE TABLE usuario (
+    id_usuario INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(50) NOT NULL,
+    apellido VARCHAR(50) NOT NULL,
+    documento VARCHAR(8) NOT NULL UNIQUE, 
+    email VARCHAR(100) NOT NULL UNIQUE
+);
+
+CREATE TABLE usuario_cliente (
+    id_usuario INT NOT NULL,
+    	FOREIGN KEY (id_usuario)
+        REFERENCES usuario(id_usuario)
+);
+
+(// SE ELIMINA EL DATO C.I. YA QUE ES REDUNDANTE, TENEMOS Documento EN LA TABLA USUARIO)
+
+CREATE TABLE usuario_administrador_taller (
+    id_usuario INT NOT NULL,
+        FOREIGN KEY (id_usuario)
+        REFERENCES usuario(id_usuario)
+);
+
+MODIFICACIONES NECESARIAS QUE SE IMPLEMENTAN:
+
+ALTER TABLE usuario
+ADD COLUMN tipo_usuario ENUM('Cliente', 'Administrador')
+NOT NULL DEFAULT 'Cliente';
+
+//Agregamos una columna que indicará que tiempo de Usuario se está ingresando (Administrador o Cliente). Todos los usuarios quedarán como Clientes por eso se realizará otra modificación:
+
+UPDATE usuario
+SET tipo_usuario = 'Administrador'
+WHERE id_usuario IN (2, 3, 6, 8, 10);
+
+// Agregamos la columna “password” para guardar las contraseñas de los usuarios logueados.
+
+ALTER TABLE usuario
+ADD COLUMN password VARCHAR(255) NOT NULL;
+// Se identifica de forma más clara y precisa al Administrador del Taller y el Administrador del Sistema para poder crear las funcionalidades de cada uno.
+
+ALTER TABLE usuario
+MODIFY COLUMN tipo_usuario
+ENUM('Cliente', 'Administrador_Taller', 'Administrador_Sistema')
+NOT NULL DEFAULT 'Cliente';
+
+Tabla: usuario_administrador_sistema.
+
+CREATE TABLE usuario_administrador_sistema (
+    id_usuario INT NOT NULL PRIMARY KEY,
+    
+    FOREIGN KEY (id_usuario)
+        REFERENCES usuario(id_usuario)
+);
+
+
+--Tabla talleres
+CREATE TABLE talleres (
+    id_taller INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(50) NOT NULL,
+    numero_puerta INT NOT NULL,
+    calle VARCHAR(30) NOT NULL,
+    ciudad VARCHAR(30) NOT NULL,
+    email VARCHAR(50) NOT NULL UNIQUE,
+    rut VARCHAR(12) NOT NULL UNIQUE,
+    hora_apertura TIME NOT NULL, 
+    hora_cierre TIME NOT NULL
+);
+
+   ** horario_atencion VARCHAR(20) NOT NULL  // Creemos que conviene separar “horario_atencion” por: hora_apertura TIME, hora_cierre TIME 
+
+// Agregamos a la Table Tallers id_administrador para que el administrador del taller pueda visualizar la información de su Taller.
+
+ALTER TABLE talleres
+ADD COLUMN id_administrador INT NULL UNIQUE,
+ADD CONSTRAINT fk_taller_administrador
+FOREIGN KEY (id_administrador)
+REFERENCES usuario(id_usuario);
+
+
+--Tabla vehículos
+CREATE TABLE vehiculos (
+    id_vehiculo INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    marca VARCHAR(30) NOT NULL,
+    modelo VARCHAR(30) NOT NULL,
+    color VARCHAR(30) NOT NULL,
+    kilometraje INT NOT NULL,
+    anio INT NOT NULL,
+    matricula VARCHAR(8) NOT NULL UNIQUE
+);
+
+
+--Tabla mecánicos
+CREATE TABLE mecanico (
+    id_mecanico INT PRIMARY KEY AUTO_INCREMENT,
+    especialidad VARCHAR(50) NOT NULL,
+    email VARCHAR(50) NOT NULL UNIQUE,
+    nombre VARCHAR(50) NOT NULL,
+    apellido VARCHAR(50) NOT NULL,
+    salario FLOAT NOT NULL,
+    fecha_ingreso DATE NOT NULL,
+    id_taller INT NOT NULL,
+    FOREIGN KEY (id_taller) REFERENCES talleres(id_taller)
+);
+
+// Se relacionan los mecánicos con los talleres donde trabajan mediante una clave foránea (ya que serán varios talleres) así cada mecánico quedará asociado a un taller, permitiendo consultar Que mecánico es del taller. Cantidad de mecánicos por taller. Reservas y reparaciones asignadas a un taller específico.
+
+id_taller INT NOT NULL,
+FOREIGN KEY (id_taller) REFERENCES talleres(id_taller)
+
+
+-- Tabla Servicios
+CREATE TABLE servicios (
+    id_servicio INT NOT NULL PRIMARY KEY AUTO_INCREMENT ,
+    nombre_servicio VARCHAR(50) NOT NULL,
+    descripcion_servicio VARCHAR(255) NOT NULL,
+    costo_primario FLOAT NOT NULL
+);
+
+-- Tabla reservas
+CREATE TABLE reservas (
+    id_reserva INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    codigo_reserva VARCHAR(10) NOT NULL UNIQUE,
+    id_usuario INT NOT NULL,
+    id_vehiculo INT NOT NULL,
+    id_taller INT NOT NULL,
+    fecha DATE NOT NULL,
+    hora TIME NOT NULL,
+
+    estado_reserva ENUM(
+        'Pendiente',
+        'Confirmada',
+        'Cancelada',
+        'Finalizada'
+    ) NOT NULL DEFAULT 'Pendiente', //si no se asigna estado, por defecto queda Pendiente.
+
+    motivo_cancelacion VARCHAR(255) NULL,
+
+    FOREIGN KEY (id_usuario)
+        REFERENCES usuario_cliente(id_usuario),
+
+    FOREIGN KEY (id_vehiculo)
+        REFERENCES vehiculos(id_vehiculo),
+
+    FOREIGN KEY (id_taller)
+        REFERENCES talleres(id_taller)
+);
+
+// Consideramos más útil que la tabla reparaciones represente cada reparación realizada y se relacione con las demás tablas mediante claves foráneas.
+
+-- TABLA REPARACIONES
+CREATE TABLE reparaciones (
+    id_reparacion INT PRIMARY KEY AUTO_INCREMENT,
+    id_vehiculo INT NOT NULL,
+    id_mecanico INT NOT NULL,
+    id_servicio INT NOT NULL,
+    id_reserva INT NOT NULL,
+    fecha_inicio DATE,
+    fecha_fin DATE,
+    demora_estimada VARCHAR(20),
+    observaciones VARCHAR(255),
+
+    FOREIGN KEY (id_vehiculo)
+        REFERENCES vehiculos(id_vehiculo),
+
+    FOREIGN KEY (id_mecanico)
+        REFERENCES mecanico(id_mecanico),
+
+    FOREIGN KEY (id_servicio)
+        REFERENCES servicios(id_servicio),
+
+    FOREIGN KEY (id_reserva)
+        REFERENCES reservas(id_reserva)
+);
+
+(Con esto se puede saber, qué vehículo fue reparado, qué mecánico realizó el trabajo, qué servicio se efectuó, a qué reserva corresponde y cuándo comenzó y terminó la reparación.)
+
+-- Tabla facturas
+CREATE TABLE facturas (
+    id_factura INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    id_reparacion INT NOT NULL,
+    monto_total FLOAT NOT NULL,
+    fecha DATE NOT NULL,
+	FOREIGN KEY (id_reparacion) 
+		REFERENCES reparaciones(id_reparacion) 
+);
+
+-- Tabla pagos     //Se agregó la relación entre pagos y facturas mediante una clave foránea. De esta manera queda indicado qué factura corresponde a cada pago.
+
+CREATE TABLE pagos (
+    id_pago INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+    id_factura INT NOT NULL,
+    metodo_pago ENUM(
+        'Efectivo',
+        'Debito',
+        'Credito',
+        'Transferencia'
+    ) NOT NULL,
+    tarjetas_admitidas VARCHAR(100) NULL,
+    fecha_pago DATE NOT NULL,
+    monto_pagado FLOAT NOT NULL,
+        FOREIGN KEY (id_factura)
+        REFERENCES facturas(id_factura)
+);
+
+INGRESO DE DATOS A LAS TABLAS!!!!
+
+– Datos Tabla Usuarios
+INSERT INTO usuario 
+(nombre, apellido, documento, email) 
+VALUES 
+('Juan', 'Perez', '45678901', 'juan.perez@email.com'),
+('Ana', 'Gomez', '51234567', 'ana.gomez@email.com'),
+('Matias', 'Sanchez', '47890123', 'matias.sanchez@email.com'),
+('Maria', 'Silva', '52345678', 'maria.silva@email.com'),
+('Carlos', 'Diaz', '48901234', 'carlos.diaz@email.com'),
+('Julio', 'Uriarte', '12554779', 'julio.uriarte@email.com'),
+('Martina', 'Lopez', '46471590', 'martina.lopez@email.com'),
+('Alberto', 'Gandini', '32545437', 'alberto.gandini@email.com'),
+('Pablo', 'Russo', '26617873', 'pablo.russo@email.com'),
+('Lucia', 'Parodi', '58205156', 'lucia.parodi@email.com');
+
+–Datos Tabla Usuario_Cliente
+INSERT INTO usuario_cliente (id_usuario)
+VALUES
+(1),
+(4),
+(5),
+(7),
+(9);
+
+–Datos Tabla Usuario_administrador_taller
+INSERT INTO usuario_administrador_taller (id_usuario)
+VALUES
+(2),
+(3),
+(6),
+(8),
+(10);
+
+-- Datos tabla vehículos 
+INSERT INTO vehiculos (marca, modelo, color, kilometraje, anio, matricula) VALUES
+('Toyota', 'Corolla', 'Blanco', 45000, 2020, 'ABE 1401'),
+('Chevrolet', 'Onix', 'Negro', 32000, 2021, 'BGA 1325'),
+('Hyundai', 'HB20', 'Rojo', 51000, 2019, 'AAY 4774'),
+('Volkswagen', 'Gol', 'Azul', 28000, 2022, 'ABL 2893'),
+('Nissan', 'Versa', 'Gris', 39000, 2020, 'SDK 1389');
+
+-- Datos tabla talleres
+INSERT INTO talleres
+(nombre, numero_puerta, calle, ciudad, email, rut, hora_apertura, hora_cierre)
+VALUES
+('AutoCentro Pando', 941, 'Guillermo Marconi', 'Pando', 'autocentropando@gmail.com', '214567890012', '08:00:00', '18:00:00'),
+('Taller Mecánico Parodi', 819, 'Dr. Luis A. de Herrera', 'Pando', 'tallerparodi@hotmail.com', '214567890013', '08:00:00', '17:00:00'),
+('Mecanica Automotriz MSANCHEZ', 1021, 'Washington Furriol', 'Pando', 'matiassanchez962@gmail.com', '214567890014', '09:00:00', '18:00:00'),
+('VHA MECANICA', 827, 'Jose Pedro Varela', 'Pando', 'vhmecanica2017@gmail.com', '214567890015', '08:00:00', '18:00:00'),
+('Mecanica Duran & Duran', 1323, 'Ituzaingó', 'Pando', 'duranyduran@gmail.com', '214567890016', '08:00:00', '18:00:00'),
+('Mecanica Corrales', 3150, 'Franklin D. Roosevelt', 'Pando', 'corralesautomoviles@gmail.com', '214567890017', '08:00:00', '16:00:00');
+
+-- Datos tabla mecánicos
+
+INSERT INTO mecanico
+(id_taller, especialidad, email, nombre, apellido, salario, fecha_ingreso)
+VALUES
+(1, 'Motor', 'pedrito.perez@gmail.com', 'Pedro', 'Perez', 45000.00, '2022-01-10'),
+(1, 'Motor', 'aldo.martinez@hotmail.com', 'Aldo', 'Martinez', 45000.00, '2021-05-16'),
+(1, 'Electricidad', 'diegofernandez1@gmail.com', 'Diego', 'Fernandez', 47000.00, '2021-05-15'),
+(3, 'Frenos', 'martincitosanchez@gmail.com', 'Martín', 'Sanchez', 43000.00, '2023-02-01'),
+(6, 'Suspensión', 'jjcorrales@hotmail.com', 'Jorge', 'Corrales', 46000.00, '2005-03-14'),
+(2, 'Suspensión', 'franciscopacheco14@gmail.com', 'Francisco', 'Pacheco', 46000.00, '2024-09-18'),
+(5, 'Diagnóstico', 'alejandro@duran.com.uy', 'Alejandro', 'Duran', 50000.00, '2010-07-02'),
+(4, 'Diagnóstico', 'andres.marquez@hotmail.com', 'Andres', 'Marquez', 50000.00, '2026-01-10'),
+(2, 'Automotriz', 'mec.hector.parodi@gmail.com', 'Hector', 'Parodi', 54100.00, '2019-11-06'),
+(5, 'Automotriz', 'carloscatoira@hotmail.com', 'Carlos', 'Catoira', 54100.00, '2020-08-20'),
+(6, 'Automotriz', 'javibenitez88@gmail.com', 'Javier', 'Benitez', 54100.00, '2015-01-07'),
+(4, 'Chapista', 'ramossergio@hotmail.com', 'Sergio', 'Ramos', 58300.00, '2019-11-07');
+
+–Tabla Reservas
+INSERT INTO reservas 
+(codigo_reserva, id_usuario, id_vehiculo, id_taller, fecha, hora, estado_reserva, motivo_cancelacion)
+VALUES
+('RES003', 1, 1, 1, '2026-06-01', '09:00:00', 'Confirmada', NULL),
+('RES005', 4, 2, 1, '2026-03-15', '08:00:00', 'Cancelada', 'Cliente no asistió'),
+('RES002', 5, 3, 2, '2026-02-07', '18:00:00', 'Confirmada', NULL),
+('RES001', 7, 1, 2, '2026-05-21', '14:00:00', 'Pendiente', NULL),
+('RES004', 9, 2, 1, '2026-07-02', '17:00:00', 'Confirmada', NULL);
+
